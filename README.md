@@ -11,8 +11,3 @@ Provided here are the code and functions that we used to create each figure in o
 conda create --name <env> --file requirements.txt
 ```
 - Download the jupyter notebook into the same directory as the data and run each block to re-create all the figures.
-
-## Additional files
-- The MiXCR txt file shows an example of the commands used for MiXCR.
-- The R code shows how unsupervised clustering and RCTD were performed on the data.
-- save_trac_and_trbc2_constant.py shows how the TCR constant UMIs were pulled from the Slide-seq data.
