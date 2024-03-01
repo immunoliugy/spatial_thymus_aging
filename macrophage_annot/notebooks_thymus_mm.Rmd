@@ -1,0 +1,145 @@
+---
+title: Thymus Macrophage
+author: Qiyu
+---
+
+```{r, message=FALSE}
+
+devtools::install_github("dmcable/spacexr", build_vignettes = FALSE)
+library(Seurat)
+library(patchwork)
+library(Matrix)
+library(sctransform)
+library(plyr)
+library(anndata)
+library(spacexr)
+library(doParallel)
+library(tidyverse)
+library(data.table)
+library(gridExtra)
+library(zellkonverter)
+set.seed(42)
+```
+
+set data path
+```{r, message=FALSE}
+dir <- '/home/rstudio/data/'
+```
+
+
+Label public data set
+```{r}
+ref_mac <- lapply(c('droplet_Spleen_seurat_tiss.Robj','droplet_Marrow_seurat_tiss.Robj'), function(x){
+  load(paste0(dir, x))
+  ref <- UpdateSeuratObject(tiss)
+  ref_mac <- subset(ref, subset = cell_ontology_class == "macrophage")
+  return(ref_mac)
+}) %>% do.call('merge', .)
+
+ref_mac <- ref_mac %>%
+  SCTransform() %>%
+  RunPCA(npcs = 30, verbose = FALSE) %>%
+  RunUMAP(reduction = "pca", dims = 1:15, verbose = FALSE) %>%
+  FindNeighbors(reduction = "pca", dims = 1:20, verbose = FALSE) %>%
+  FindClusters(resolution = 0.3, verbose = FALSE)
+
+m1 <- c('Il1a','Il1b','Il6','Nos2','Tlr2','Tlr4','Cd80','Cd86',
+        'Cxcl2','Marco','Tnf','Ifng','Il1r1')
+m2 <- c('Csf1r','Mrc1','Pparg','Arg1','Cd163','Clec7a','Pdcd1lg2',
+        'Retnla','Mrc1','Il10','Irf4','Pdgfb','Stat6','Chi3l3')
+ref_mac <- AddModuleScore(ref_mac, features = list(m1,m2))
+FeaturePlot(ref_mac, features = c('Cluster1','Cluster2'), order = T)
+DimPlot(ref_mac)
+```
+
+
+cluster 4 can also be M2, set it as candidate
+```{r}
+ref_mac$cluster <- as.character(ref_mac$seurat_clusters) %>% {
+  .[. == '5'] <- 'M2'
+  .[. == '3'] <- 'M1'
+  ;.}
+saveRDS(ref_mac, file = paste0(dir,'ref_mac.rds'))
+```
+
+
+subset macrophage from slideseq data
+```{r, message=FALSE}
+adata <- readH5AD(paste0(dir, 'Thymus_data_TCR_locs.h5ad'))
+expr_matrix = adata@assays@data$X
+cell_metadata = as.data.frame(adata@colData@listData)
+all <- CreateSeuratObject(counts = expr_matrix, meta.data = cell_metadata)
+mac <- subset(all, subset = Cell_type == "Mac" | Cell_type2 == "Mac")
+saveRDS(mac, file = paste0(dir, 'Thymus_macrophage.rds'))
+```
+
+
+
+create RCTD object
+```{r}
+mac <- readRDS(paste0(dir,'Thymus_macrophage.rds'))
+ref <- readRDS(paste0(dir,'ref_mac.rds'))
+counts <- as.matrix(ref@assays$RNA@counts)
+cell_types <- as.factor(ref$cluster)
+nUMI <- ref$nCount_RNA
+reference <- Reference(counts, cell_types, nUMI)
+
+vec <- unique(mac$Age)[order(unique(mac$Age))]
+group <- rep(1:5, each = length(vec) %/% 5)
+if (length(vec) %% 5 != 0) {group <- c(group, rep(5, length(vec) %% 5))}
+age_group <- split(vec, group)
+names(age_group) <- c('0-3','4-10','13-35','42-105','196-630')
+
+mac_age_list <- lapply(names(age_group), function(x){
+  group = age_group[[x]]
+  seu = subset(mac, subset = Age %in% group)
+  count = as.matrix(seu@assays$RNA@layers$counts)
+  rownames(count) <- rownames(seu)
+  colnames(count) <- colnames(seu)
+  coord = as.data.frame(seu@meta.data[,c('x_val','y_val')])
+  puck <- spacexr::SpatialRNA(coord, count)
+  return(puck)
+}) %>% {names(.) <- names(age_group);.}
+```
+
+
+run RCTD for calling M1 and M2
+```{r, message=FALSE}
+replicate_names <- c('1','2','3','4','5')
+myRCTD.reps <- create.RCTD.replicates(mac_age_list, reference, replicate_names, max_cores = 32)
+myRCTD.reps <- run.RCTD.replicates(myRCTD.reps)
+saveRDS(myRCTD.reps, file = paste0(dir,'Thymus_macrophage_RCTD.rds'))
+
+# add label to seurat object
+myRCTD.reps <- readRDS(paste0(dir,'Thymus_macrophage_RCTD.rds'))
+mac <- readRDS(paste0(dir,'Thymus_macrophage.rds'))
+combined_result <- do.call('rbind', lapply(1:5, function(x) {
+  myRCTD.reps@RCTD.reps[[x]]@results$results_df
+})) %>% .[, c("spot_class", "first_type", "second_type")] %>% 
+  {colnames(.) <- paste0('mac_',c("spot_class", "first_type", "second_type"));.}
+combined_result$barcodes <- rownames(combined_result)
+df <- mac@meta.data
+df$barcodes <- rownames(df)
+meta <- merge(df, combined_result, all = TRUE)
+rownames(meta) <- meta$barcodes
+mac@meta.data <- meta
+
+mac$mac_first_type <- as.character(mac$mac_first_type)
+mac@meta.data[is.na(mac@meta.data$mac_first_type), "mac_first_type"] <- 'N'
+Idents(mac) <- mac$mac_first_type
+saveRDS(mac, paste0(dir,'Thymus_macrophage_merge.rds'))
+```
+
+
+
+```{r, plot}
+df = as.data.frame(table(mac$Age, mac$mac_first_type))
+df <- df[df$Var2 %in% c('M1', "M2"), ]
+p <- ggplot(df, aes(x=Var1, y=Freq, fill = Var2)) + 
+  geom_bar(stat="identity", position="fill") + 
+  theme_bw() + 
+  labs(title="Proportion of M1 and M2 by Age", x="Age", y="Proportion") + 
+  scale_y_continuous(labels=scales::percent_format()); print(p)
+```
+
+
