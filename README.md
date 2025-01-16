@@ -1,5 +1,4 @@
-# atlas_mouse_thymus
-
+# spatial_thymus_aging
 Provided here are the code and functions that we used to create each figure in our manuscript. All data are available on https://singlecell.broadinstitute.org/single_cell/study/SCP2424
 
 ## Quickstart
