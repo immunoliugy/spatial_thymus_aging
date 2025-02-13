@@ -23,7 +23,7 @@ Provided here are the code and functions that we used to create each figure in o
 ---
 
 ## **Quickstart with Code Ocean**
-This Code Capsule is hosted on **Code Ocean**, a platform recommended for **reproducible code** by *Nature Aging*.
+This Code Capsule is hosted on **Code Ocean**, a platform recommended for **reproducible code**.
 
 ---
 
