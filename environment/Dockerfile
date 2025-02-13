@@ -1,0 +1,38 @@
+# hash:sha256:1d488869131559fbe2bf220a0359d414caf3cb72d1a640316c1d7bce7184d23c
+FROM registry.codeocean.com/codeocean/miniconda3:4.12.0-python3.9-ubuntu20.04
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN conda install -y \
+        geopandas==0.14.2 \
+        jupyter==1.1.1 \
+        matplotlib==3.9.2 \
+        numpy==1.26.4 \
+        pandas==2.2.3 \
+        python==3.9.21 \
+        scikit-learn==1.5.2 \
+        scipy==1.12.0 \
+        seaborn==0.13.2 \
+        shapely==2.0.6 \
+    && conda clean -ya
+
+RUN pip install -U --no-cache-dir \
+    hdf5plugin==5.0.0
+
+RUN pip3 install -U --no-cache-dir \
+    alphashape==1.3.1 \
+    anndata==0.10.9 \
+    editdistance==0.8.1 \
+    google==3.0.0 \
+    google-cloud-storage==2.19.0 \
+    gseapy==1.1.4 \
+    libpysal==4.8.1 \
+    lowess==1.0.3 \
+    matplotlib-scalebar==0.9.0 \
+    matplotlib-venn==1.1.1 \
+    multiprocess==0.70.17 \
+    openpyxl==3.1.5 \
+    pickle5==0.0.11 \
+    scanpy==1.10.3 \
+    scikit-bio==0.6.3 \
+    squidpy==1.6.1
