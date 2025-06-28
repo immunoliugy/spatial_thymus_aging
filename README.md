@@ -16,7 +16,7 @@ Provided here are the code and functions that we used to create each figure in o
 3. **Install Required Packages**  
    - Create a Conda environment and install dependencies:
    ```shell
-   conda create --name <env> --file requirements.txt
+   conda create --name <env> --file environment.yml
    conda activate <env>
    ```
 
